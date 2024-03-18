@@ -239,6 +239,9 @@ static void test_trace_breakpoint(int pc, Op *pOp, Vdbe *v){
 /* Return true if the cursor was opened using the OP_OpenSorter opcode. */
 #define isSorter(x) ((x)->eCurType==CURTYPE_SORTER)
 
+/* Return true if the cursor is of type CURYTPE_VECTOR_IDX. */
+#define isVectorIdx(x) ((x)->eCurType==CURTYPE_VECTOR_IDX)
+
 /*
 ** Allocate VdbeCursor number iCur.  Return a pointer to it.  Return NULL
 ** if we run out of memory.
@@ -4192,6 +4195,31 @@ case OP_SetCookie: {
   break;
 }
 
+/* Opcode: OpenVectorIdx
+** Synopsis: root=P2 iDb=P3
+*/
+case OP_OpenVectorIdx: {
+  KeyInfo *pKeyInfo = 0;
+  int nField = 0;
+  if( pOp->p4type==P4_KEYINFO ){
+    pKeyInfo = pOp->p4.pKeyInfo;
+    assert( pKeyInfo->enc==ENC(db) );
+    assert( pKeyInfo->db==db );
+    nField = pKeyInfo->nAllField;
+  }else if( pOp->p4type==P4_INT32 ){
+    nField = pOp->p4.i;
+  }
+  VdbeCursor *pCur = allocateCursor(p, pOp->p1, nField, CURTYPE_VECTOR_IDX);
+  if( pCur==0 ) goto no_mem;
+  pCur->iDb = pOp->p3;
+  pCur->nullRow = 1;
+  pCur->isOrdered = 1;
+  pCur->pgnoRoot = pOp->p2;
+  pCur->pKeyInfo = 0;
+  pCur->isTable = 0;
+  break;
+}
+
 /* Opcode: OpenRead P1 P2 P3 P4 P5
 ** Synopsis: root=P2 iDb=P3
 **
@@ -6502,6 +6530,11 @@ case OP_IdxInsert: {        /* in2 */
   assert( (pIn2->flags & MEM_Blob) || (pOp->p5 & OPFLAG_PREFORMAT) );
   if( pOp->p5 & OPFLAG_NCHANGE ) p->nChange++;
   if (!pC->isEphemeral) p->aLibsqlCounter[LIBSQL_STMTSTATUS_ROWS_WRITTEN - LIBSQL_STMTSTATUS_BASE]++;
+  if( isVectorIdx(pC) ) {
+    rc = vectorIndexInsert();
+    if( rc ) goto abort_due_to_error;
+    break;
+  }
   assert( pC->eCurType==CURTYPE_BTREE );
   assert( pC->isTable==0 );
   rc = ExpandBlob(pIn2);

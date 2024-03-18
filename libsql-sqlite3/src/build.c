@@ -3952,6 +3952,10 @@ void sqlite3CreateIndex(
   char *zExtra = 0;                /* Extra space after the Index object */
   Index *pPk = 0;      /* PRIMARY KEY index for WITHOUT ROWID tables */
 
+  if( idxType==SQLITE_IDXTYPE_VECTOR ){
+    vectorIndexCreate();
+  }
+
   assert( db->pParse==pParse );
   if( pParse->nErr ){
     goto exit_create_index;
