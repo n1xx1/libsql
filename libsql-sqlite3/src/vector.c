@@ -62,31 +62,16 @@ static void vectorDeinit(Vector *p){
   sqlite3_free(p->data);
 }
 
-static float vectorDot(Vector *v1, Vector *v2){
-  float dot = 0;
-  size_t i;
+static float vectorDistanceCos(Vector *v1, Vector *v2){
+  float dot = 0, norm1 = 0, norm2 = 0;
+  int i;
   assert( v1->len == v2->len );
   for(i = 0; i < v1->len; i++){
     dot += v1->data[i]*v2->data[i];
+    norm1 += v1->data[i]*v1->data[i];
+    norm2 += v2->data[i]*v2->data[i];
   }
-  return dot;
-}
-
-static float vectorNorm(Vector *v){
-  float norm = 0;
-  size_t i;
-  for(i = 0; i < v->len; i++){
-    norm += v->data[i] * v->data[i];
-  }
-  return sqrt(norm);
-}
-
-static float vectorDistanceCos(Vector *v1, Vector *v2){
-  float dot, norm1, norm2;
-  dot = vectorDot(v1, v2);
-  norm1 = vectorNorm(v1);
-  norm2 = vectorNorm(v2);
-  return dot / (norm1 * norm2);
+  return dot / sqrt(norm1 * norm2);
 }
 
 static inline unsigned serializeU32(unsigned char *mem, u32 num){
