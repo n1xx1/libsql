@@ -337,8 +337,8 @@ static void vectorDeserialize(
 struct VectorIdxCursor {
 };
 
-int vectorIndexCreate(void){
-  printf("STUB: vectorIndexCreate\n");
+int vectorIndexCreate(Index *pIdx){
+  printf("STUB: vectorIndexCreate: %s\n", pIdx->zName);
   return 0;
 }
 

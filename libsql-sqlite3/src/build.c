@@ -3952,10 +3952,6 @@ void sqlite3CreateIndex(
   char *zExtra = 0;                /* Extra space after the Index object */
   Index *pPk = 0;      /* PRIMARY KEY index for WITHOUT ROWID tables */
 
-  if( idxType==SQLITE_IDXTYPE_VECTOR ){
-    vectorIndexCreate();
-  }
-
   assert( db->pParse==pParse );
   if( pParse->nErr ){
     goto exit_create_index;
@@ -4177,6 +4173,10 @@ void sqlite3CreateIndex(
     pPIWhere = 0;
   }
   assert( sqlite3SchemaMutexHeld(db, iDb, 0) );
+
+  if( idxType==SQLITE_IDXTYPE_VECTOR ){
+    vectorIndexCreate(pIndex);
+  }
 
   /* Check to see if we should honor DESC requests on index columns
   */

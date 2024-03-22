@@ -684,7 +684,7 @@ int sqlite3VdbeSorterRewind(const VdbeCursor *, int *);
 int sqlite3VdbeSorterWrite(const VdbeCursor *, Mem *);
 int sqlite3VdbeSorterCompare(const VdbeCursor *, Mem *, int, int *);
 
-int vectorIndexCreate(void);
+int vectorIndexCreate(Index *);
 int vectorIndexInsert(void);
 
 void sqlite3VdbeValueListFree(void*);
