@@ -342,7 +342,10 @@ int vectorIndexCreate(Index *pIdx){
   return 0;
 }
 
-int vectorIndexInsert(void){
+int vectorIndexInsert(
+  VectorIdxCursor *pCur,
+  const BtreePayload *pX
+){
   printf("STUB: vectorIndexInsert\n");
   return 0;
 }

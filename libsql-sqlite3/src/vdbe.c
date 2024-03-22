@@ -6531,7 +6531,13 @@ case OP_IdxInsert: {        /* in2 */
   if( pOp->p5 & OPFLAG_NCHANGE ) p->nChange++;
   if (!pC->isEphemeral) p->aLibsqlCounter[LIBSQL_STMTSTATUS_ROWS_WRITTEN - LIBSQL_STMTSTATUS_BASE]++;
   if( isVectorIdx(pC) ) {
-    rc = vectorIndexInsert();
+    rc = ExpandBlob(pIn2);
+    if( rc ) goto abort_due_to_error;
+    x.nKey = pIn2->n;
+    x.pKey = pIn2->z;
+    x.aMem = aMem + pOp->p3;
+    x.nMem = (u16)pOp->p4.i;
+    rc = vectorIndexInsert(pC->uc.pVecIdx, &x);
     if( rc ) goto abort_due_to_error;
     break;
   }
