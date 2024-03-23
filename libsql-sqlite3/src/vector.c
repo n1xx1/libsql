@@ -71,7 +71,7 @@ static float vectorDistanceCos(Vector *v1, Vector *v2){
     norm1 += v1->data[i]*v1->data[i];
     norm2 += v2->data[i]*v2->data[i];
   }
-  return dot / sqrt(norm1 * norm2);
+  return 1.0 - (dot / sqrt(norm1 * norm2));
 }
 
 static inline unsigned serializeU32(unsigned char *mem, u32 num){
