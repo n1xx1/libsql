@@ -62,6 +62,9 @@ typedef struct VdbeTxtBlbCache VdbeTxtBlbCache;
 /* Opaque type used in code in vector.c */
 typedef struct VectorIdxCursor VectorIdxCursor;
 
+/* Opaque type used in code in vector_diskann.c */
+typedef struct DiskAnnIndex DiskAnnIndex;
+
 /* Types of VDBE cursors */
 #define CURTYPE_BTREE       0
 #define CURTYPE_SORTER      1
@@ -687,6 +690,9 @@ int sqlite3VdbeSorterCompare(const VdbeCursor *, Mem *, int, int *);
 int vectorIndexCursorInit(sqlite3 *, VdbeCursor *, const char *);
 int vectorIndexCreate(Index *);
 int vectorIndexInsert(VectorIdxCursor *, const BtreePayload *);
+
+int diskAnnOpenIndex(sqlite3 *, const char *zName, DiskAnnIndex **);
+int diskAnnInsert(DiskAnnIndex *, const void *, i64);
 
 void sqlite3VdbeValueListFree(void*);
 

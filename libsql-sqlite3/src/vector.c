@@ -27,18 +27,10 @@
 #ifndef SQLITE_OMIT_VECTOR
 #include "sqliteInt.h"
 
+#include "vector.h"
+
 #define MAX_VECTOR_SZ 16000
 #define MAX_FLOAT_CHAR_SZ  1024
-
-/* Objects */
-typedef struct Vector Vector;
-
-/* An instance of this object represents a vector.
-*/
-struct Vector {
-  float *data;
-  size_t len;
-};
 
 /**************************************************************************
 ** Utility routines for dealing with Vector objects
@@ -329,32 +321,12 @@ static void vectorDeserialize(
 ** Vector index cursor implementations
 ****************************************************************************/
 
-typedef struct VectorIndexFile VectorIndexFile;
-
-struct VectorIndexFile {
-  sqlite3_file *pFd;
-};
-
-static int vectorOpenIndexFile(
-  sqlite3 *db,
-  const char *zName,
-  sqlite3_file **ppFd
-){
-  int rc;
-  if( sqlite3FaultSim(202) ) return SQLITE_IOERR_ACCESS;
-  rc = sqlite3OsOpenMalloc(db->pVfs, zName,ppFd,
-      SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, &rc
-  );
-  // TODO: close the file and free the memory
-  return rc;
-}
-
 /*
 ** A VectorIdxCursor is a special cursor to perform vector index lookups.
  */
 struct VectorIdxCursor {
-  sqlite3 *db;                    /* Database connection */
-  VectorIndexFile file;         /* File containing the index */
+  sqlite3 *db;          /* Database connection */
+  DiskAnnIndex *index;   /* DiskANN index on disk */
 };
 
 int vectorIndexCreate(Index *pIdx){
@@ -374,10 +346,9 @@ int vectorIndexInsert(
   assert( r.nField == 2 );
   vec = r.aMem + 0;
   assert( sqlite3_value_type(vec) == SQLITE_BLOB );
-  vectorDump(sqlite3_value_blob(vec));
   rowid = r.aMem + 1;
   assert( sqlite3_value_type(rowid) == SQLITE_INTEGER );
-  printf("rowid = %lld\n", sqlite3_value_int64(rowid));
+  diskAnnInsert(pCur->index, sqlite3_value_blob(vec), sqlite3_value_int64(rowid));
   return 0;
 }
 
@@ -400,7 +371,7 @@ int vectorIndexCursorInit(sqlite3 *db, VdbeCursor *pCsr, const char *zIndexName)
   if( pCur == 0 ){
     return SQLITE_NOMEM_BKPT;
   }
-  rc = vectorOpenIndexFile(db, zIndexFile, &pCur->file.pFd);
+  rc = diskAnnOpenIndex(db, zIndexFile, &pCur->index);
   if( rc!=SQLITE_OK ){
     return rc;
   }

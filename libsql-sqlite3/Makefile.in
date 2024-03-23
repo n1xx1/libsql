@@ -194,7 +194,7 @@ LIBOBJS0 = alter.lo analyze.lo attach.lo auth.lo \
          random.lo resolve.lo rowset.lo rtree.lo \
          sqlite3session.lo select.lo sqlite3rbu.lo status.lo stmt.lo \
          table.lo threads.lo tokenize.lo treeview.lo trigger.lo \
-         update.lo userauth.lo upsert.lo util.lo vacuum.lo vector.lo \
+         update.lo userauth.lo upsert.lo util.lo vacuum.lo vector.lo vector_diskann.lo \
          vdbe.lo vdbeapi.lo vdbeaux.lo vdbeblob.lo vdbemem.lo vdbesort.lo \
          vdbetrace.lo vdbevtab.lo \
          wal.lo walker.lo wasmedge_bindings.lo where.lo wherecode.lo whereexpr.lo \
@@ -300,6 +300,7 @@ SRC = \
   $(TOP)/src/util.c \
   $(TOP)/src/vacuum.c \
   $(TOP)/src/vector.c \
+  $(TOP)/src/vector_diskann.c \
   $(TOP)/src/vdbe.c \
   $(TOP)/src/vdbe.h \
   $(TOP)/src/vdbeapi.c \
@@ -1106,6 +1107,9 @@ vacuum.lo:	$(TOP)/src/vacuum.c $(HDR)
 
 vector.lo:	$(TOP)/src/vector.c $(HDR)
 	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/vector.c
+
+vector_diskann.lo:	$(TOP)/src/vector_diskann.c $(HDR)
+	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/vector_diskann.c
 
 vdbe.lo:	$(TOP)/src/vdbe.c $(HDR)
 	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/vdbe.c
