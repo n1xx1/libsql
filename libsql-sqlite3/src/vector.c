@@ -281,6 +281,19 @@ static inline unsigned formatF32(float num, char *str){
   }
 }
 
+static void vectorDump(const void *rawVec){
+  unsigned int len;
+  unsigned int i;
+  len = deserializeU32(rawVec);
+  rawVec += sizeof(u32);
+  for(i = 0; i < len; i++){
+    float f = deserializeF32(rawVec);
+    printf("%f ", f);
+    rawVec += sizeof(float);
+  }
+  printf("\n");
+}
+
 static void vectorDeserialize(
   sqlite3_context *context,
   Vector *v
@@ -331,7 +344,15 @@ int vectorIndexInsert(
   VectorIdxCursor *pCur,
   const BtreePayload *pX
 ){
-  printf("STUB: vectorIndexInsert\n");
+  struct sqlite3_value *blob = pX->aMem;
+  const void *data;
+  unsigned int len;
+  assert( blob );
+  assert( sqlite3_value_type(blob)==SQLITE_BLOB );
+  data = sqlite3_value_blob(blob);
+  assert( data );
+  printf("Inserting vector to index:\n");
+  vectorDump(data);
   return 0;
 }
 
