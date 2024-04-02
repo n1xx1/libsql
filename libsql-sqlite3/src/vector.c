@@ -345,15 +345,18 @@ int vectorIndexInsert(
   VectorIdxCursor *pCur,
   const BtreePayload *pX
 ){
-  struct sqlite3_value *blob = pX->aMem;
-  const void *data;
-  unsigned int len;
-  assert( blob );
-  assert( sqlite3_value_type(blob)==SQLITE_BLOB );
-  data = sqlite3_value_blob(blob);
-  assert( data );
-  printf("Inserting vector %u to index:\n", pCur->nextVectorId++);
-  vectorDump(data);
+  struct sqlite3_value *rowid;
+  struct sqlite3_value *vec;
+  UnpackedRecord r;
+  r.aMem = pX->aMem;
+  r.nField = pX->nMem;
+  assert( r.nField == 2 );
+  vec = r.aMem + 0;
+  assert( sqlite3_value_type(vec) == SQLITE_BLOB );
+  vectorDump(sqlite3_value_blob(vec));
+  rowid = r.aMem + 1;
+  assert( sqlite3_value_type(rowid) == SQLITE_INTEGER );
+  printf("rowid = %lld\n", sqlite3_value_int64(rowid));
   return 0;
 }
 
