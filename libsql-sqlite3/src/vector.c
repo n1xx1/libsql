@@ -333,6 +333,7 @@ static void vectorDeserialize(
 ** A VectorIdxCursor is a special cursor to perform vector index lookups.
  */
 struct VectorIdxCursor {
+  unsigned int nextVectorId;
 };
 
 int vectorIndexCreate(Index *pIdx){
@@ -351,8 +352,25 @@ int vectorIndexInsert(
   assert( sqlite3_value_type(blob)==SQLITE_BLOB );
   data = sqlite3_value_blob(blob);
   assert( data );
-  printf("Inserting vector to index:\n");
+  printf("Inserting vector %u to index:\n", pCur->nextVectorId++);
   vectorDump(data);
+  return 0;
+}
+
+int vectorIndexCursorInit(sqlite3 *db, VdbeCursor *pCsr){
+  VectorIdxCursor *pCur;
+
+  printf("STUB: vectorIndexCursorInit\n");
+  // TODO: Where do we deallocate this?
+  pCur = sqlite3DbMallocZero(db, sizeof(VectorIdxCursor));
+  if (pCur == 0) {
+    return SQLITE_NOMEM_BKPT;
+  } else {
+    // TODO: Load from disk.
+    pCur->nextVectorId = 0;
+    pCsr->uc.pVecIdx = pCur;
+    return SQLITE_OK;
+  }
   return 0;
 }
 
