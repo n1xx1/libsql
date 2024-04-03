@@ -381,28 +381,26 @@ int vectorIndexInsert(
   return 0;
 }
 
-int vectorIndexCursorInit(sqlite3 *db, VdbeCursor *pCsr){
+int vectorIndexCursorInit(sqlite3 *db, VdbeCursor *pCsr, const char *zIndexName){
   VectorIdxCursor *pCur;
-  char zIndexName[SQLITE_MAX_PATHLEN];
-  const char *zDatabaseName;
+  char zIndexFile[SQLITE_MAX_PATHLEN];
+  const char *zDbPath;
   int rc;
 
   // TODO: We're taking the filename of the currently selected
   // database (think attach). I think it's what we want to do,
   // but let's verify.
-  zDatabaseName = sqlite3_db_filename(db, db->aDb[pCsr->iDb].zDbSName);
+  zDbPath = sqlite3_db_filename(db, db->aDb[pCsr->iDb].zDbSName);
 
   // TODO: We may want to use a name that is unique to the _index_.
-  sqlite3_snprintf(sizeof(zIndexName), zIndexName, "%s-vectoridx", zDatabaseName);
-
-  printf("Initializing cursor to %s\n", zIndexName);
+  sqlite3_snprintf(sizeof(zIndexFile), zIndexFile, "%s-vectoridx-%s", zDbPath, zIndexName);
 
   // TODO: Where do we deallocate this?
   pCur = sqlite3DbMallocZero(db, sizeof(VectorIdxCursor));
   if( pCur == 0 ){
     return SQLITE_NOMEM_BKPT;
   }
-  rc = vectorOpenIndexFile(db, zIndexName, &pCur->file.pFd);
+  rc = vectorOpenIndexFile(db, zIndexFile, &pCur->file.pFd);
   if( rc!=SQLITE_OK ){
     return rc;
   }

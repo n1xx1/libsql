@@ -4201,6 +4201,7 @@ case OP_SetCookie: {
 case OP_OpenVectorIdx: {
   // TODO: Can we simplify this similar to OP_SorterOpen?
   KeyInfo *pKeyInfo = 0;
+  Index *pIdx;
   int nField = 0;
   if( pOp->p4type==P4_KEYINFO ){
     pKeyInfo = pOp->p4.pKeyInfo;
@@ -4218,7 +4219,7 @@ case OP_OpenVectorIdx: {
   pCur->pgnoRoot = pOp->p2;
   pCur->pKeyInfo = 0;
   pCur->isTable = 0;
-  rc = vectorIndexCursorInit(db, pCur);
+  rc = vectorIndexCursorInit(db, pCur, pKeyInfo->zIndexName);
   if( rc ) goto abort_due_to_error;
   break;
 }
