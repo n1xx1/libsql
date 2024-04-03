@@ -329,10 +329,32 @@ static void vectorDeserialize(
 ** Vector index cursor implementations
 ****************************************************************************/
 
+typedef struct VectorIndexFile VectorIndexFile;
+
+struct VectorIndexFile {
+  sqlite3_file *pFd;
+};
+
+static int vectorOpenIndexFile(
+  sqlite3 *db,
+  const char *zName,
+  sqlite3_file **ppFd
+){
+  int rc;
+  if( sqlite3FaultSim(202) ) return SQLITE_IOERR_ACCESS;
+  rc = sqlite3OsOpenMalloc(db->pVfs, zName,ppFd,
+      SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, &rc
+  );
+  // TODO: close the file and free the memory
+  return rc;
+}
+
 /*
 ** A VectorIdxCursor is a special cursor to perform vector index lookups.
  */
 struct VectorIdxCursor {
+  sqlite3 *db;                    /* Database connection */
+  VectorIndexFile file;         /* File containing the index */
 };
 
 int vectorIndexCreate(Index *pIdx){
@@ -361,18 +383,32 @@ int vectorIndexInsert(
 
 int vectorIndexCursorInit(sqlite3 *db, VdbeCursor *pCsr){
   VectorIdxCursor *pCur;
+  char zIndexName[SQLITE_MAX_PATHLEN];
+  const char *zDatabaseName;
+  int rc;
 
-  printf("STUB: vectorIndexCursorInit\n");
+  // TODO: We're taking the filename of the currently selected
+  // database (think attach). I think it's what we want to do,
+  // but let's verify.
+  zDatabaseName = sqlite3_db_filename(db, db->aDb[pCsr->iDb].zDbSName);
+
+  // TODO: We may want to use a name that is unique to the _index_.
+  sqlite3_snprintf(sizeof(zIndexName), zIndexName, "%s-vectoridx", zDatabaseName);
+
+  printf("Initializing cursor to %s\n", zIndexName);
+
   // TODO: Where do we deallocate this?
   pCur = sqlite3DbMallocZero(db, sizeof(VectorIdxCursor));
-  if (pCur == 0) {
+  if( pCur == 0 ){
     return SQLITE_NOMEM_BKPT;
-  } else {
-    // TODO: Load from disk.
-    pCsr->uc.pVecIdx = pCur;
-    return SQLITE_OK;
   }
-  return 0;
+  rc = vectorOpenIndexFile(db, zIndexName, &pCur->file.pFd);
+  if( rc!=SQLITE_OK ){
+    return rc;
+  }
+  pCur->db = db;
+  pCsr->uc.pVecIdx = pCur;
+  return SQLITE_OK;
 }
 
 /**************************************************************************
