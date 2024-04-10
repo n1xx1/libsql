@@ -69,6 +69,7 @@ static void vectorInitFromBlob(Vector *p, u32 type, const unsigned char *blob){
     default:
       assert(0);
   }
+  p->type = type;
 }
 
 static float vectorDistanceCos(Vector *v1, Vector *v2){
