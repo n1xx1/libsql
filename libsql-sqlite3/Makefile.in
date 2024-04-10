@@ -300,8 +300,9 @@ SRC = \
   $(TOP)/src/util.c \
   $(TOP)/src/vacuum.c \
   $(TOP)/src/vector.c \
-  $(TOP)/src/vector_fmtf32.c \
+  $(TOP)/src/vectorInt.h \
   $(TOP)/src/vector_diskann.c \
+  $(TOP)/src/vector_fmtf32.c \
   $(TOP)/src/vdbe.c \
   $(TOP)/src/vdbe.h \
   $(TOP)/src/vdbeapi.c \
