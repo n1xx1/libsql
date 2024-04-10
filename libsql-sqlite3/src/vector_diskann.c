@@ -48,17 +48,19 @@ typedef struct DiskAnnMetadata DiskAnnMetadata;
 typedef struct DiskAnnFreeBlock DiskAnnFreeBlock;
 
 struct DiskAnnHeader {
-  i64 nMagic;           /* Magic number */
-  i64 firstVectorBlock; /* First vector block */
-  i64 firstFreeBlock;   /* First free block */
+  i64 nMagic;                        /* Magic number */
+  unsigned short nBlockSize;         /* Block size */
+  unsigned short nVectorType;        /* Vector type */
+  unsigned short nVectorDims;        /* Number of vector dimensions */
+  unsigned short similarityFunction; /* Similarity function */
+  i64 firstVectorOffset;             /* First vector offset */
+  i64 firstFreeOffset;               /* First free offset */
 };
 
 struct DiskAnnVectorBlock {
   i64 rowid;                      /* Rowid */
   unsigned short nBlockSize;      /* Block size */
   unsigned short nNeighbours;     /* Number of neighbours */
-  unsigned short nVectorDims;     /* Number of vector dimensions */
-  unsigned short nVectorType;     /* Vector type */
   DiskAnnVector  *pNeighbours;    /* Next vector block */
   DiskAnnMetadata *pMetadata;     /* Metadata */
 };
@@ -119,16 +121,7 @@ int diskAnnInsert(
   blockData[i++] = rowid >> 40;
   blockData[i++] = rowid >> 48;
   blockData[i++] = rowid >> 56;
-  /* nBlockSize */
-  blockData[i++] = nBlockSize;
-  blockData[i++] = nBlockSize >> 8;
   /* nNeighbours */
-  blockData[i++] = 0x00;
-  blockData[i++] = 0x00;
-  /* nVectorDims */
-  blockData[i++] = 0;
-  blockData[i++] = 0;
-  /* nVectorType */
   blockData[i++] = 0x00;
   blockData[i++] = 0x00;
   rc = sqlite3OsWrite(pIndex->pFd, blockData, nBlockSize, pIndex->nFileSize);
@@ -178,8 +171,10 @@ int diskAnnOpenIndex(
   if( pIndex->nFileSize == 0 ){
     /* Initialize header */
     pIndex->header.nMagic = 0x4e4e416b736944; /* 'DiskANN' */
-    pIndex->header.firstVectorBlock = 0;
-    pIndex->header.firstFreeBlock = 0;
+    pIndex->header.nBlockSize = 4096;
+    pIndex->header.nVectorType = VECTOR_TYPE_F32;
+    pIndex->header.nVectorDims = 0;
+    pIndex->header.similarityFunction = 0;
     rc = diskAnnWriteHeader(pIndex->pFd, &pIndex->header);
     if( rc != SQLITE_OK ){
       goto err_free;
