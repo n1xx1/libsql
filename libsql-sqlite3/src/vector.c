@@ -294,15 +294,11 @@ static inline unsigned formatF32(float num, char *str){
   }
 }
 
-static void vectorDump(const void *rawVec){
-  unsigned int len;
-  unsigned int i;
-  len = deserializeU32(rawVec);
-  rawVec += sizeof(u32);
-  for(i = 0; i < len; i++){
-    float f = deserializeF32(rawVec);
-    printf("%f ", f);
-    rawVec += sizeof(float);
+void vectorDump(Vector *pVec){
+  float *elems = pVec->data;
+  unsigned i;
+  for(i = 0; i < pVec->len; i++){
+    printf("%f ", elems[i]);
   }
   printf("\n");
 }

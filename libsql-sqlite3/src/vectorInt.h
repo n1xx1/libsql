@@ -18,6 +18,8 @@ struct Vector {
   size_t len;
 };
 
+void vectorDump(Vector *v);
+
 int diskAnnOpenIndex(sqlite3 *, const char *zName, DiskAnnIndex **);
 int diskAnnInsert(DiskAnnIndex *, Vector *v, i64);
 
