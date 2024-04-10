@@ -38,12 +38,13 @@
 
 /* Initialize the Vector object
 */
-static int vectorInit(Vector *p, sqlite3_context *pCtx){
+static int vectorInit(Vector *p, u32 type, sqlite3_context *pCtx){
   p->data = contextMalloc(pCtx, MAX_VECTOR_SZ);
   if( p->data==0 ){
     sqlite3_result_error_nomem(pCtx);
     return -1;
   }
+  p->type = type;
   p->len = 0;
   return 0;
 }
@@ -325,7 +326,7 @@ static void vectorFunc(
   if( argc < 1 ){
     return;
   }
-  if( vectorInit(&vec, context)<0 ){
+  if( vectorInit(&vec, VECTOR_TYPE_F32, context)<0 ){
     return;
   }
   if( vectorParse(context, argv[0], &vec)>0 ) {
@@ -350,7 +351,7 @@ static void vectorExtractFunc(
   if( argc < 1 ){
     return;
   }
-  if( vectorInit(&vec, context)<0 ){
+  if( vectorInit(&vec, VECTOR_TYPE_F32, context)<0 ){
     return;
   }
   if( vectorParse(context, argv[0], &vec)<0 ){
@@ -373,10 +374,10 @@ static void vectorDistanceCosFunc(
   if( argc < 2 ) {
     return;
   }
-  if( vectorInit(&vec1, context)<0 ){
+  if( vectorInit(&vec1, VECTOR_TYPE_F32, context)<0 ){
     return;
   }
-  if( vectorInit(&vec2, context)<0 ){
+  if( vectorInit(&vec2, VECTOR_TYPE_F32, context)<0 ){
     goto out_free_vec1;
   }
   if( vectorParse(context, argv[0], &vec1)<0 ){
