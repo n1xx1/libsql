@@ -246,6 +246,17 @@ static void vectorSerialize(
   }
 }
 
+size_t vectorSerializeToBlob(Vector *p, unsigned char *blob, size_t blobSize){
+  switch (p->type) {
+    case VECTOR_TYPE_F32:
+      return vectorF32SerializeToBlob(p, blob, blobSize);
+      break;
+    default:
+      assert(0);
+  }
+  return 0;
+}
+
 /**************************************************************************
 ** Vector index cursor implementations
 ****************************************************************************/

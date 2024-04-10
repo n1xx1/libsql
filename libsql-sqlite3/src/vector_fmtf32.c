@@ -76,6 +76,24 @@ static inline float deserializeF32(const unsigned char *mem){
   return *(float *)&p;
 }
 
+size_t vectorF32SerializeToBlob(
+  Vector *v,
+  unsigned char *blob,
+  size_t blobSz
+){
+  float *elems = v->data;
+  unsigned char *blobPtr = blob;
+  size_t len = 0;
+  assert( blobSz >= sizeof(u32) + v->len * sizeof(float) );
+  blobPtr += serializeU32(blobPtr, v->len);
+  len += sizeof(u32);
+  for (unsigned i = 0; i < v->len; i++) {
+    blobPtr += serializeF32(blobPtr, elems[i]);
+    len += sizeof(float);
+  }
+  return len;
+}
+
 void vectorF32Serialize(
   sqlite3_context *context,
   Vector *v
@@ -89,14 +107,8 @@ void vectorF32Serialize(
   blob = contextMalloc(context, blobSz);
 
   if( blob ){
-    unsigned i;
+    vectorF32SerializeToBlob(v, blob, blobSz);
 
-    blobPtr = blob;
-    blobPtr += serializeU32(blobPtr, v->len);
-
-    for (i = 0; i < v->len; i++) {
-      blobPtr += serializeF32(blobPtr, elems[i]);
-    }
     sqlite3_result_blob(context, (char*)blob, blobSz, sqlite3_free);
   } else {
     sqlite3_result_error_nomem(context);

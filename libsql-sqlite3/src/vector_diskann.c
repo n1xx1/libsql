@@ -108,8 +108,8 @@ int diskAnnInsert(
   int nBlockSize = 4096;
   int rc = SQLITE_OK;
   int i = 0;
-  vectorDump(pVec);
   memset(blockData, 0, nBlockSize); // TODO: eliminate this
+  i = vectorSerializeToBlob(pVec, (unsigned char*)blockData, nBlockSize);
   /* rowid */
   blockData[i++] = rowid;
   blockData[i++] = rowid >> 8;
