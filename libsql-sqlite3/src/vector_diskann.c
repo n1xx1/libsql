@@ -38,7 +38,7 @@
 #ifndef SQLITE_OMIT_VECTOR
 #include "sqliteInt.h"
 
-#include "vector.h"
+#include "vectorInt.h"
 
 /* Objects */
 typedef struct DiskAnnIndex DiskAnnIndex;
