@@ -11,14 +11,24 @@ extern "C" {
 typedef struct Vector Vector;
 typedef struct DiskAnnIndex DiskAnnIndex;
 
+#define VECTOR_TYPE_F32 0
+
 /* An instance of this object represents a vector.
 */
 struct Vector {
+  u32 type;
+  u32 len;
   void *data;
-  size_t len;
 };
 
 void vectorDump(Vector *v);
+
+void vectorF32Dump(Vector *v);
+void vectorF32Deserialize(sqlite3_context *,Vector *v);
+void vectorF32Serialize(sqlite3_context *,Vector *v);
+void vectorF32InitFromBlob(Vector *, const unsigned char *);
+size_t vectorF3ParseBlob(sqlite3_context *, sqlite3_value *, Vector *);
+float vectorF32DistanceCos(Vector *, Vector *);
 
 int diskAnnOpenIndex(sqlite3 *, const char *zName, DiskAnnIndex **);
 int diskAnnInsert(DiskAnnIndex *, Vector *v, i64);

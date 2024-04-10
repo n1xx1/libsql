@@ -466,6 +466,7 @@ set flist {
 
    json.c
    vector.c
+   vector_fmtf32.c
    vector_diskann.c
    rtree.c
    icu.c

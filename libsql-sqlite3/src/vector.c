@@ -33,40 +33,6 @@
 #define MAX_FLOAT_CHAR_SZ  1024
 
 /**************************************************************************
-** Utility routines for serializing and deserializing
-**************************************************************************/
-
-static inline unsigned serializeU32(unsigned char *mem, u32 num){
-  mem[0] = num & 0xFF;
-  mem[1] = (num >> 8) & 0xFF;
-  mem[2] = (num >> 16) & 0xFF;
-  mem[3] = (num >> 24) & 0xFF;
-  return sizeof(u32);
-}
-
-static inline u32 deserializeU32(const unsigned char *mem){
-  return (mem[3] << 24) | (mem[2] << 16) | (mem[1] << 8) | mem[0];
-}
-
-static inline unsigned serializeF32(unsigned char *mem, float num){
-  u32 *p = (u32 *)&num;
-  mem[0] = *p & 0xFF;
-  mem[1] = (*p >> 8) & 0xFF;
-  mem[2] = (*p >> 16) & 0xFF;
-  mem[3] = (*p >> 24) & 0xFF;
-  return sizeof(float);
-}
-
-static inline float deserializeF32(const unsigned char *mem){
-  u32 p = 0;
-  p |= (u32)mem[0];
-  p |= (u32)mem[1] << 8;
-  p |= (u32)mem[2] << 16;
-  p |= (u32)mem[3] << 24;
-  return *(float *)&p;
-}
-
-/**************************************************************************
 ** Utility routines for dealing with Vector objects
 **************************************************************************/
 
@@ -94,24 +60,26 @@ static void vectorDeinit(Vector *p){
 ** Note that that the vector object points to the blob so if
 ** you free the blob, the vector becomes invalid.
 **/
-static void vectorInitFromBlob(Vector *p, const unsigned char *blob){
-  p->len = deserializeU32(blob);
-  blob += sizeof(u32);
-  p->data = (void*)blob;
+static void vectorInitFromBlob(Vector *p, u32 type, const unsigned char *blob){
+  switch (type) {
+    case VECTOR_TYPE_F32:
+      vectorF32InitFromBlob(p, blob);
+      break;
+    default:
+      assert(0);
+  }
 }
 
 static float vectorDistanceCos(Vector *v1, Vector *v2){
-  float dot = 0, norm1 = 0, norm2 = 0;
-  float *e1 = v1->data;
-  float *e2 = v2->data;
-  int i;
-  assert( v1->len == v2->len );
-  for(i = 0; i < v1->len; i++){
-    dot += e1[i]*e2[i];
-    norm1 += e1[i]*e1[i];
-    norm2 += e2[i]*e2[i];
+  assert(v1->type == v2->type);
+  switch (v1->type) {
+    case VECTOR_TYPE_F32:
+      return vectorF32DistanceCos(v1, v2);
+      break;
+    default:
+      assert(0);
   }
-  return 1.0 - (dot / sqrt(norm1 * norm2));
+  return -1;
 }
 
 static size_t vectorParseText(
@@ -200,40 +168,13 @@ static size_t vectorParseBlob(
   sqlite3_value *arg,
   Vector *v
 ){
-  const unsigned char *blob;
-  float *elems = v->data;
-  char zErr[128];
-  unsigned i;
-  size_t len;
-
-  if( sqlite3_value_type(arg)!=SQLITE_BLOB ){
-    sqlite3_snprintf(sizeof(zErr), zErr, "invalid vector: not a blob type");
-    goto error;
+  switch (v->type) {
+    case VECTOR_TYPE_F32:
+      return vectorF3ParseBlob(context, arg, v);
+      break;
+    default:
+      assert(0);
   }
-
-  blob = sqlite3_value_blob(arg);
-  if( !blob ) {
-    sqlite3_snprintf(sizeof(zErr), zErr, "invalid vector: zero length");
-    goto error;
-  }
-  len = deserializeU32(blob);
-  if (len > MAX_VECTOR_SZ) {
-    sqlite3_snprintf(sizeof(zErr), zErr, "invalid vector: too large: %d", len);
-    goto error;
-  }
-  blob += sizeof(u32);
-  for(i = 0; i < len; i++){
-    if( !blob ){
-      sqlite3_snprintf(sizeof(zErr), zErr, "malformed blob");
-      goto error;
-    }
-    elems[i] = deserializeF32(blob);
-    blob += sizeof(float);
-  }
-  v->len = len;
-  return len;
-error:
-  sqlite3_result_error(context, zErr, -1);
   return -1;
 }
 
@@ -254,33 +195,6 @@ static size_t vectorParse(
   }
 }
 
-static void vectorSerialize(
-  sqlite3_context *context,
-  Vector *v
-){
-  float *elems = v->data;
-  unsigned char *blob;
-  unsigned char *blobPtr;
-  unsigned int blobSz;
-
-  blobSz = sizeof(u32) + v->len * sizeof(float);
-  blob = contextMalloc(context, blobSz);
-
-  if( blob ){
-    unsigned i;
-
-    blobPtr = blob;
-    blobPtr += serializeU32(blobPtr, v->len);
-
-    for (i = 0; i < v->len; i++) {
-      blobPtr += serializeF32(blobPtr, elems[i]);
-    }
-    sqlite3_result_blob(context, (char*)blob, blobSz, sqlite3_free);
-  } else {
-    sqlite3_result_error_nomem(context);
-  }
-}
-
 static inline int isInteger(float num){
   return num == (u64)num;
 }
@@ -295,43 +209,38 @@ static inline unsigned formatF32(float num, char *str){
 }
 
 void vectorDump(Vector *pVec){
-  float *elems = pVec->data;
-  unsigned i;
-  for(i = 0; i < pVec->len; i++){
-    printf("%f ", elems[i]);
+  switch (pVec->type) {
+    case VECTOR_TYPE_F32:
+      vectorF32Dump(pVec);
+      break;
+    default:
+      assert(0);
   }
-  printf("\n");
 }
 
 static void vectorDeserialize(
   sqlite3_context *context,
   Vector *v
 ){
-  float *elems = v->data;
-  unsigned bufSz;
-  unsigned bufIdx = 0;
-  char *z;
+  switch (v->type) {
+    case VECTOR_TYPE_F32:
+      vectorF32Deserialize(context, v);
+      break;
+    default:
+      assert(0);
+  }
+}
 
-  bufSz = 2 + v->len * 33;
-  z = contextMalloc(context, bufSz);
-
-  if( z ){
-    unsigned i;
-
-    z[bufIdx++]= '[';
-    for (i = 0; i < v->len; i++) { 
-      char tmp[12];
-      unsigned bytes = formatF32(elems[i], tmp);
-      memcpy(&z[bufIdx], tmp, bytes);
-      bufIdx += strlen(tmp);
-      z[bufIdx++] = ',';
-    }
-    bufIdx--;
-    z[bufIdx++] = ']';
-
-    sqlite3_result_text(context, z, bufIdx, sqlite3_free);
-  } else {
-    sqlite3_result_error_nomem(context);
+static void vectorSerialize(
+  sqlite3_context *context,
+  Vector *v
+){
+  switch (v->type) {
+    case VECTOR_TYPE_F32:
+      vectorF32Serialize(context, v);
+      break;
+    default:
+      assert(0);
   }
 }
 
@@ -367,7 +276,7 @@ int vectorIndexInsert(
   rowid = r.aMem + 1;
   assert( sqlite3_value_type(rowid) == SQLITE_INTEGER );
   Vector v;
-  vectorInitFromBlob(&v, sqlite3_value_blob(vec));
+  vectorInitFromBlob(&v, VECTOR_TYPE_F32, sqlite3_value_blob(vec));
   diskAnnInsert(pCur->index, &v, sqlite3_value_int64(rowid));
   return 0;
 }
