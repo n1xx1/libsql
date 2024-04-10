@@ -47,6 +47,16 @@ typedef struct DiskAnnVector DiskAnnVector;
 typedef struct DiskAnnMetadata DiskAnnMetadata;
 typedef struct DiskAnnFreeBlock DiskAnnFreeBlock;
 
+/**
+** The block size in bytes.
+**/
+#define DISKANN_BLOCK_SIZE 4096
+
+/**
+** The bit shift to get the block size in bytes.
+**/
+#define DISKANN_BLOCK_SIZE_SHIFT 9
+
 struct DiskAnnHeader {
   i64 nMagic;                        /* Magic number */
   unsigned short nBlockSize;         /* Block size */
@@ -106,12 +116,12 @@ int diskAnnInsert(
   Vector *pVec,
   i64 rowid
 ){
-  char blockData[4096];
-  int nBlockSize = 4096;
+  char blockData[DISKANN_BLOCK_SIZE]; // TODO: dynamic allocation
+  unsigned int nBlockSize = pIndex->header.nBlockSize << DISKANN_BLOCK_SIZE_SHIFT;
   int rc = SQLITE_OK;
   int i = 0;
-  memset(blockData, 0, nBlockSize); // TODO: eliminate this
-  i = vectorSerializeToBlob(pVec, (unsigned char*)blockData, nBlockSize);
+  memset(blockData, 0, DISKANN_BLOCK_SIZE);
+  i = vectorSerializeToBlob(pVec, (unsigned char*)blockData, DISKANN_BLOCK_SIZE);
   /* rowid */
   blockData[i++] = rowid;
   blockData[i++] = rowid >> 8;
@@ -171,7 +181,7 @@ int diskAnnOpenIndex(
   if( pIndex->nFileSize == 0 ){
     /* Initialize header */
     pIndex->header.nMagic = 0x4e4e416b736944; /* 'DiskANN' */
-    pIndex->header.nBlockSize = 4096;
+    pIndex->header.nBlockSize = DISKANN_BLOCK_SIZE >> DISKANN_BLOCK_SIZE_SHIFT;
     pIndex->header.nVectorType = VECTOR_TYPE_F32;
     pIndex->header.nVectorDims = 0;
     pIndex->header.similarityFunction = 0;
@@ -179,7 +189,7 @@ int diskAnnOpenIndex(
     if( rc != SQLITE_OK ){
       goto err_free;
     }
-    pIndex->nFileSize = sizeof(DiskAnnHeader);
+    pIndex->nFileSize = pIndex->header.nBlockSize << DISKANN_BLOCK_SIZE_SHIFT;
   } else {
     /* Read header */
     rc = diskAnnReadHeader(pIndex->pFd, &pIndex->header);
