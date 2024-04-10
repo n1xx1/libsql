@@ -94,6 +94,25 @@ size_t vectorF32SerializeToBlob(
   return len;
 }
 
+size_t vectorF32DeserializeFromBlob(
+  Vector *v,
+  const unsigned char *blob,
+  size_t blobSz
+){
+  float *elems = v->data;
+  size_t len = 0;
+  v->len = deserializeU32(blob);
+  assert( blobSz >= sizeof(u32) + v->len * sizeof(float) );
+  blob += sizeof(u32);
+  len += sizeof(u32);
+  for (unsigned i = 0; i < v->len; i++) {
+    elems[i] = deserializeF32(blob);
+    blob += sizeof(float);
+    len += sizeof(float);
+  }
+  return len;
+}
+
 void vectorF32Serialize(
   sqlite3_context *context,
   Vector *v

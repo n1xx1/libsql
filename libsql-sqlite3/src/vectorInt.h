@@ -22,6 +22,7 @@ struct Vector {
 };
 
 size_t vectorSerializeToBlob(Vector *, unsigned char *, size_t);
+size_t vectorDeserializeFromBlob(Vector *, const unsigned char *, size_t);
 void vectorDump(Vector *v);
 
 void vectorF32Dump(Vector *v);
@@ -30,6 +31,7 @@ void vectorF32Serialize(sqlite3_context *,Vector *v);
 void vectorF32InitFromBlob(Vector *, const unsigned char *);
 size_t vectorF3ParseBlob(sqlite3_context *, sqlite3_value *, Vector *);
 size_t vectorF32SerializeToBlob(Vector *, unsigned char *, size_t);
+size_t vectorF32DeserializeFromBlob(Vector *, const unsigned char *, size_t);
 float vectorF32DistanceCos(Vector *, Vector *);
 
 int diskAnnOpenIndex(sqlite3 *, const char *zName, DiskAnnIndex **);
