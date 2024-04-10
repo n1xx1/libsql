@@ -41,7 +41,6 @@
 #include "vectorInt.h"
 
 /* Objects */
-typedef struct DiskAnnIndex DiskAnnIndex;
 typedef struct DiskAnnHeader DiskAnnHeader;
 typedef struct DiskAnnVectorBlock DiskAnnVectorBlock;
 typedef struct DiskAnnVector DiskAnnVector;
@@ -103,7 +102,7 @@ static int diskAnnWriteHeader(
 
 int diskAnnInsert(
   DiskAnnIndex *pIndex,
-  const void *vec,
+  Vector *pVec,
   i64 rowid
 ){
   char blockData[4096];

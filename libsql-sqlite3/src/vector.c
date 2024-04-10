@@ -33,38 +33,8 @@
 #define MAX_FLOAT_CHAR_SZ  1024
 
 /**************************************************************************
-** Utility routines for dealing with Vector objects
+** Utility routines for serializing and deserializing
 **************************************************************************/
-
-/* Initialize the Vector object
-*/
-static int vectorInit(Vector *p, sqlite3_context *pCtx){
-  p->data = contextMalloc(pCtx, MAX_VECTOR_SZ);
-  if( p->data==0 ){
-    sqlite3_result_error_nomem(pCtx);
-    return -1;
-  }
-  p->len = 0;
-  return 0;
-}
-
-/* Deinitialize the Vector object
-*/
-static void vectorDeinit(Vector *p){
-  sqlite3_free(p->data);
-}
-
-static float vectorDistanceCos(Vector *v1, Vector *v2){
-  float dot = 0, norm1 = 0, norm2 = 0;
-  int i;
-  assert( v1->len == v2->len );
-  for(i = 0; i < v1->len; i++){
-    dot += v1->data[i]*v2->data[i];
-    norm1 += v1->data[i]*v1->data[i];
-    norm2 += v2->data[i]*v2->data[i];
-  }
-  return 1.0 - (dot / sqrt(norm1 * norm2));
-}
 
 static inline unsigned serializeU32(unsigned char *mem, u32 num){
   mem[0] = num & 0xFF;
@@ -96,6 +66,54 @@ static inline float deserializeF32(const unsigned char *mem){
   return *(float *)&p;
 }
 
+/**************************************************************************
+** Utility routines for dealing with Vector objects
+**************************************************************************/
+
+/* Initialize the Vector object
+*/
+static int vectorInit(Vector *p, sqlite3_context *pCtx){
+  p->data = contextMalloc(pCtx, MAX_VECTOR_SZ);
+  if( p->data==0 ){
+    sqlite3_result_error_nomem(pCtx);
+    return -1;
+  }
+  p->len = 0;
+  return 0;
+}
+
+/* Deinitialize the Vector object
+*/
+static void vectorDeinit(Vector *p){
+  sqlite3_free(p->data);
+}
+
+/*
+** Initialize the Vector object from blob
+**
+** Note that that the vector object points to the blob so if
+** you free the blob, the vector becomes invalid.
+**/
+static void vectorInitFromBlob(Vector *p, const unsigned char *blob){
+  p->len = deserializeU32(blob);
+  blob += sizeof(u32);
+  p->data = (void*)blob;
+}
+
+static float vectorDistanceCos(Vector *v1, Vector *v2){
+  float dot = 0, norm1 = 0, norm2 = 0;
+  float *e1 = v1->data;
+  float *e2 = v2->data;
+  int i;
+  assert( v1->len == v2->len );
+  for(i = 0; i < v1->len; i++){
+    dot += e1[i]*e2[i];
+    norm1 += e1[i]*e1[i];
+    norm2 += e2[i]*e2[i];
+  }
+  return 1.0 - (dot / sqrt(norm1 * norm2));
+}
+
 static size_t vectorParseText(
   sqlite3_context *context,
   sqlite3_value *arg,
@@ -103,6 +121,7 @@ static size_t vectorParseText(
 ){
   char elBuf[MAX_FLOAT_CHAR_SZ];
   const unsigned char *zStr;
+  float *elems = v->data;
   char zErr[128];
   int bufidx = 0;
   int vecidx = 0;
@@ -147,7 +166,7 @@ static size_t vectorParseText(
       }
       bufidx = 0;
       memset(elBuf, 0, sizeof(elBuf));
-      v->data[vecidx++] = el;
+      elems[vecidx++] = el;
       if (vecidx >= MAX_VECTOR_SZ) {
         sqlite3_snprintf(sizeof(zErr), zErr, "vector is larger than the maximum: (%d)", MAX_VECTOR_SZ);
         return -1;
@@ -159,7 +178,7 @@ static size_t vectorParseText(
       sqlite3_snprintf(sizeof(zErr), zErr, "invalid number: %s...", elBuf);
         return -1;
     }
-    v->data[vecidx++] = el;
+    elems[vecidx++] = el;
     if (vecidx >= MAX_VECTOR_SZ) {
       sqlite3_snprintf(sizeof(zErr), zErr, "vector is larger than the maximum: (%d)", MAX_VECTOR_SZ);
         return -1;
@@ -182,6 +201,7 @@ static size_t vectorParseBlob(
   Vector *v
 ){
   const unsigned char *blob;
+  float *elems = v->data;
   char zErr[128];
   unsigned i;
   size_t len;
@@ -207,7 +227,7 @@ static size_t vectorParseBlob(
       sqlite3_snprintf(sizeof(zErr), zErr, "malformed blob");
       goto error;
     }
-    v->data[i] = deserializeF32(blob);
+    elems[i] = deserializeF32(blob);
     blob += sizeof(float);
   }
   v->len = len;
@@ -238,6 +258,7 @@ static void vectorSerialize(
   sqlite3_context *context,
   Vector *v
 ){
+  float *elems = v->data;
   unsigned char *blob;
   unsigned char *blobPtr;
   unsigned int blobSz;
@@ -252,7 +273,7 @@ static void vectorSerialize(
     blobPtr += serializeU32(blobPtr, v->len);
 
     for (i = 0; i < v->len; i++) {
-      blobPtr += serializeF32(blobPtr, v->data[i]);
+      blobPtr += serializeF32(blobPtr, elems[i]);
     }
     sqlite3_result_blob(context, (char*)blob, blobSz, sqlite3_free);
   } else {
@@ -290,6 +311,7 @@ static void vectorDeserialize(
   sqlite3_context *context,
   Vector *v
 ){
+  float *elems = v->data;
   unsigned bufSz;
   unsigned bufIdx = 0;
   char *z;
@@ -303,7 +325,7 @@ static void vectorDeserialize(
     z[bufIdx++]= '[';
     for (i = 0; i < v->len; i++) { 
       char tmp[12];
-      unsigned bytes = formatF32(v->data[i], tmp);
+      unsigned bytes = formatF32(elems[i], tmp);
       memcpy(&z[bufIdx], tmp, bytes);
       bufIdx += strlen(tmp);
       z[bufIdx++] = ',';
@@ -348,7 +370,9 @@ int vectorIndexInsert(
   assert( sqlite3_value_type(vec) == SQLITE_BLOB );
   rowid = r.aMem + 1;
   assert( sqlite3_value_type(rowid) == SQLITE_INTEGER );
-  diskAnnInsert(pCur->index, sqlite3_value_blob(vec), sqlite3_value_int64(rowid));
+  Vector v;
+  vectorInitFromBlob(&v, sqlite3_value_blob(vec));
+  diskAnnInsert(pCur->index, &v, sqlite3_value_int64(rowid));
   return 0;
 }
 

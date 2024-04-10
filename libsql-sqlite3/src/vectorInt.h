@@ -14,12 +14,12 @@ typedef struct DiskAnnIndex DiskAnnIndex;
 /* An instance of this object represents a vector.
 */
 struct Vector {
-  float *data;
+  void *data;
   size_t len;
 };
 
 int diskAnnOpenIndex(sqlite3 *, const char *zName, DiskAnnIndex **);
-int diskAnnInsert(DiskAnnIndex *, const void *, i64);
+int diskAnnInsert(DiskAnnIndex *, Vector *v, i64);
 
 #ifdef __cplusplus
 }  /* end of the 'extern "C"' block */
