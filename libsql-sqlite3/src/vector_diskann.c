@@ -96,7 +96,6 @@ static int diskAnnWriteHeader(
   int rc;
   // TODO: endianess
   rc = sqlite3OsWrite(pFd, pHeader, sizeof(DiskAnnHeader), 0);
-  assert( rc!=SQLITE_IOERR_SHORT_WRITE );
   return rc;
 }
 
