@@ -35,6 +35,7 @@ size_t vectorF32DeserializeFromBlob(Vector *, const unsigned char *, size_t);
 float vectorF32DistanceCos(Vector *, Vector *);
 
 int diskAnnOpenIndex(sqlite3 *, const char *zName, DiskAnnIndex **);
+void diskAnnCloseIndex(DiskAnnIndex *pIndex);
 int diskAnnInsert(DiskAnnIndex *, Vector *v, i64);
 
 #ifdef __cplusplus

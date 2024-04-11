@@ -446,4 +446,9 @@ err_free:
   sqlite3_free(pIndex);
   return rc;
 }
+
+void diskAnnCloseIndex(DiskAnnIndex *pIndex){
+  sqlite3OsClose(pIndex->pFd);
+  sqlite3_free(pIndex);
+}
 #endif /* !defined(SQLITE_OMIT_VECTOR) */

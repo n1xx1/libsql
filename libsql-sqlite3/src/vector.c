@@ -333,6 +333,12 @@ int vectorIndexCursorInit(sqlite3 *db, VdbeCursor *pCsr, const char *zIndexName)
   return SQLITE_OK;
 }
 
+void vectorIndexCursorClose(sqlite3 *db, VdbeCursor *pCsr){
+  VectorIdxCursor *pCur = pCsr->uc.pVecIdx;
+  diskAnnCloseIndex(pCur->index);
+  sqlite3DbFree(db, pCur);
+}
+
 /**************************************************************************
 ** SQL function implementations
 ****************************************************************************/

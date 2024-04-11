@@ -685,6 +685,7 @@ int sqlite3VdbeSorterWrite(const VdbeCursor *, Mem *);
 int sqlite3VdbeSorterCompare(const VdbeCursor *, Mem *, int, int *);
 
 int vectorIndexCursorInit(sqlite3 *, VdbeCursor *, const char *);
+void vectorIndexCursorClose(sqlite3 *db, VdbeCursor *pCsr);
 int vectorIndexCreate(Index *);
 int vectorIndexInsert(VectorIdxCursor *, const BtreePayload *);
 
