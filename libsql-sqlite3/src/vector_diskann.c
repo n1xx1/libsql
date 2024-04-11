@@ -101,6 +101,10 @@ static void vectorNodeFree(VectorNode *pNode){
 ** Utility routines for parsing the index file
 **************************************************************************/
 
+static int blockSize(DiskAnnIndex *pIndex){
+  return pIndex->header.nBlockSize << DISKANN_BLOCK_SIZE_SHIFT;
+}
+
 static int diskAnnReadHeader(
   sqlite3_file *pFd,
   DiskAnnHeader *pHeader
@@ -308,7 +312,7 @@ int diskAnnInsert(
     // TODO: prune pNode
   }
 
-  nBlockSize = pIndex->header.nBlockSize << DISKANN_BLOCK_SIZE_SHIFT;
+  nBlockSize = blockSize(pIndex);
   offset = pIndex->nFileSize;
   pIndex->nFileSize += diskAnnWriteVector(pIndex, pVec, id, aNeighbours, nNeighbours, offset, nBlockSize);
 
@@ -373,7 +377,7 @@ int diskAnnOpenIndex(
     if( rc != SQLITE_OK ){
       goto err_free;
     }
-    pIndex->nFileSize = pIndex->header.nBlockSize << DISKANN_BLOCK_SIZE_SHIFT;
+    pIndex->nFileSize = blockSize(pIndex);
   } else {
     /* Read header */
     rc = diskAnnReadHeader(pIndex->pFd, &pIndex->header);
