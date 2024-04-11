@@ -44,6 +44,7 @@
 typedef struct DiskAnnHeader DiskAnnHeader;
 typedef struct SearchContext SearchContext;
 typedef struct VectorNode VectorNode;
+typedef struct Metadata Metadata;
 
 /**
 ** The block size in bytes.
@@ -74,8 +75,14 @@ struct DiskAnnIndex {
 struct VectorNode {
   Vector vec;
   u64 id;
+  u64 offset;
   int visited;                    /* Is this node visited? */
   VectorNode *pNext;              /* Next node in the visited list */
+};
+
+struct Metadata {
+  u64 id;
+  u64 offset;
 };
 
 /**************************************************************************
@@ -101,8 +108,28 @@ static void vectorNodeFree(VectorNode *pNode){
 ** Utility routines for parsing the index file
 **************************************************************************/
 
-static int blockSize(DiskAnnIndex *pIndex){
+#define VECTOR_METADATA_SIZE    sizeof(u64)
+#define NEIGHBOUR_METADATA_SIZE sizeof(Metadata)
+
+static unsigned int blockSize(DiskAnnIndex *pIndex){
   return pIndex->header.nBlockSize << DISKANN_BLOCK_SIZE_SHIFT;
+}
+
+static unsigned int vectorSize(DiskAnnIndex *pIndex){
+  assert( pIndex->header.nVectorType == VECTOR_TYPE_F32 );
+  return sizeof(u32) + pIndex->header.nVectorDims * sizeof(float);
+}
+
+static int neighbourMetadataOffset(DiskAnnIndex *pIndex){
+  unsigned int nNeighbourVectorSize;
+  unsigned int maxNeighbours;
+  unsigned int nVectorSize;
+  unsigned int nBlockSize;
+  nBlockSize = blockSize(pIndex);
+  nVectorSize = vectorSize(pIndex);
+  nNeighbourVectorSize = vectorSize(pIndex);
+  maxNeighbours = (nBlockSize - nVectorSize - VECTOR_METADATA_SIZE) / (nNeighbourVectorSize + NEIGHBOUR_METADATA_SIZE);
+  return nVectorSize + VECTOR_METADATA_SIZE + maxNeighbours * (nNeighbourVectorSize); 
 }
 
 static int diskAnnReadHeader(
@@ -163,6 +190,7 @@ static VectorNode *diskAnnReadVector(
     | (u64) blockData[i+6] << 48
     | (u64) blockData[i+7] << 56;
   i += 8;
+  pNode->offset = offset;
   return pNode;
 }
 
@@ -171,6 +199,7 @@ static int diskAnnWriteVector(
   Vector *pVec,
   u64 id,
   Vector **aNeighbours,
+  Metadata *aNeighbourMetadata,
   int nNeighbours,
   u64 offset,
   u64 nBlockSize
@@ -194,6 +223,25 @@ static int diskAnnWriteVector(
   blockData[off++] = nNeighbours >> 8;
   for (int i = 0; i < nNeighbours; i++) {
     off += vectorSerializeToBlob(aNeighbours[i], (unsigned char*)&blockData[off], DISKANN_BLOCK_SIZE);
+  }
+  off = neighbourMetadataOffset(pIndex);
+  for( int i = 0; i < nNeighbours; i++ ){
+    blockData[off++] = aNeighbourMetadata[i].id;
+    blockData[off++] = aNeighbourMetadata[i].id >> 8;
+    blockData[off++] = aNeighbourMetadata[i].id >> 16;
+    blockData[off++] = aNeighbourMetadata[i].id >> 24;
+    blockData[off++] = aNeighbourMetadata[i].id >> 32;
+    blockData[off++] = aNeighbourMetadata[i].id >> 40;
+    blockData[off++] = aNeighbourMetadata[i].id >> 48;
+    blockData[off++] = aNeighbourMetadata[i].id >> 56;
+    blockData[off++] = aNeighbourMetadata[i].offset;
+    blockData[off++] = aNeighbourMetadata[i].offset >> 8;
+    blockData[off++] = aNeighbourMetadata[i].offset >> 16;
+    blockData[off++] = aNeighbourMetadata[i].offset >> 24;
+    blockData[off++] = aNeighbourMetadata[i].offset >> 32;
+    blockData[off++] = aNeighbourMetadata[i].offset >> 40;
+    blockData[off++] = aNeighbourMetadata[i].offset >> 48;
+    blockData[off++] = aNeighbourMetadata[i].offset >> 56;
   }
   rc = sqlite3OsWrite(pIndex->pFd, blockData, nBlockSize, pIndex->nFileSize);
   if( rc != SQLITE_OK ){
@@ -285,6 +333,9 @@ int diskAnnSearch(
 ** DiskANN insertion
 **************************************************************************/
 
+// TODO: fix hard-coded limit
+#define MAX_NEIGHBOURS 10
+
 int diskAnnInsert(
   DiskAnnIndex *pIndex,
   Vector *pVec,
@@ -292,7 +343,8 @@ int diskAnnInsert(
 ){
   unsigned int nNeighbours = 0;
   unsigned int nBlockSize;
-  Vector *aNeighbours[10]; // TODO: fix hard-coded limit
+  Vector *aNeighbours[MAX_NEIGHBOURS]; 
+  Metadata aNeighbourMetadata[MAX_NEIGHBOURS];
   VectorNode *pNode;
   SearchContext ctx;
   u64 offset;
@@ -304,7 +356,10 @@ int diskAnnInsert(
   initSearchContext(&ctx, pVec, 10); // TODO: Fix hard-coded L
   diskAnnSearch(pIndex, &ctx);
   for( VectorNode *pNeighbour = ctx.visitedList; pNeighbour!=NULL; pNeighbour = pNeighbour->pNext ){
-    aNeighbours[nNeighbours++] = &pNeighbour->vec;
+    aNeighbours[nNeighbours] = &pNeighbour->vec;
+    aNeighbourMetadata[nNeighbours].id = pNeighbour->id;
+    aNeighbourMetadata[nNeighbours].offset = pNeighbour->offset;
+    nNeighbours++;
   }
   // TODO: prune p 
   for( VectorNode* pNeighbour = ctx.visitedList; pNeighbour!=NULL; pNeighbour = pNeighbour->pNext ){
@@ -314,7 +369,7 @@ int diskAnnInsert(
 
   nBlockSize = blockSize(pIndex);
   offset = pIndex->nFileSize;
-  pIndex->nFileSize += diskAnnWriteVector(pIndex, pVec, id, aNeighbours, nNeighbours, offset, nBlockSize);
+  pIndex->nFileSize += diskAnnWriteVector(pIndex, pVec, id, aNeighbours, aNeighbourMetadata, nNeighbours, offset, nBlockSize);
 
   deinitSearchContext(&ctx);
 
