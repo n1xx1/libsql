@@ -63,12 +63,12 @@ struct DiskAnnHeader {
   unsigned short nVectorType;        /* Vector type */
   unsigned short nVectorDims;        /* Number of vector dimensions */
   unsigned short similarityFunction; /* Similarity function */
-  i64 firstVectorOffset;             /* First vector offset */
+  i64 entryVectorOffset;             /* Offset to random offset to use to start search */
   i64 firstFreeOffset;               /* First free offset */
 };
 
 struct DiskAnnVectorBlock {
-  i64 rowid;                      /* Rowid */
+  i64 id;                         /* ID */
   unsigned short nBlockSize;      /* Block size */
   unsigned short nNeighbours;     /* Number of neighbours */
   DiskAnnVector  *pNeighbours;    /* Next vector block */
@@ -81,7 +81,7 @@ struct DiskAnnVector {
 
 struct DiskAnnMetadata {
   sqlite_uint64 offset;           /* Offset */
-  sqlite_uint64 rowid;            /* Size */
+  sqlite_uint64 id;               /* Size */
 };
 
 struct DiskAnnIndex {
@@ -89,6 +89,10 @@ struct DiskAnnIndex {
   DiskAnnHeader header;           /* Header */
   i64 nFileSize;                  /* File size */
 };
+
+/**************************************************************************
+** Utility routines for parsing the index file
+**************************************************************************/
 
 static int diskAnnReadHeader(
   sqlite3_file *pFd,
@@ -111,26 +115,27 @@ static int diskAnnWriteHeader(
   return rc;
 }
 
-int diskAnnInsert(
+static int diskAnnWriteVectorBlock(
   DiskAnnIndex *pIndex,
   Vector *pVec,
-  i64 rowid
+  u64 id,
+  u64 offset,
+  u64 nBlockSize
 ){
   char blockData[DISKANN_BLOCK_SIZE]; // TODO: dynamic allocation
-  unsigned int nBlockSize = pIndex->header.nBlockSize << DISKANN_BLOCK_SIZE_SHIFT;
   int rc = SQLITE_OK;
   int i = 0;
   memset(blockData, 0, DISKANN_BLOCK_SIZE);
   i = vectorSerializeToBlob(pVec, (unsigned char*)blockData, DISKANN_BLOCK_SIZE);
-  /* rowid */
-  blockData[i++] = rowid;
-  blockData[i++] = rowid >> 8;
-  blockData[i++] = rowid >> 16;
-  blockData[i++] = rowid >> 24;
-  blockData[i++] = rowid >> 32;
-  blockData[i++] = rowid >> 40;
-  blockData[i++] = rowid >> 48;
-  blockData[i++] = rowid >> 56;
+  /* ID */
+  blockData[i++] = id;
+  blockData[i++] = id >> 8;
+  blockData[i++] = id >> 16;
+  blockData[i++] = id >> 24;
+  blockData[i++] = id >> 32;
+  blockData[i++] = id >> 40;
+  blockData[i++] = id >> 48;
+  blockData[i++] = id >> 56;
   /* nNeighbours */
   blockData[i++] = 0x00;
   blockData[i++] = 0x00;
@@ -141,6 +146,29 @@ int diskAnnInsert(
   pIndex->nFileSize += nBlockSize;
   return rc;
 }
+
+/**************************************************************************
+** DiskANN insertion
+**************************************************************************/
+
+int diskAnnInsert(
+  DiskAnnIndex *pIndex,
+  Vector *pVec,
+  i64 id
+){
+  unsigned int nBlockSize = pIndex->header.nBlockSize << DISKANN_BLOCK_SIZE_SHIFT;
+  u64 offset;
+  offset = pIndex->nFileSize;
+  pIndex->nFileSize += diskAnnWriteVectorBlock(pIndex, pVec, id, offset, nBlockSize);
+  pIndex->header.entryVectorOffset = offset;
+  // TODO: eliminate this header write for every insertion
+  diskAnnWriteHeader(pIndex->pFd, &pIndex->header);
+  return SQLITE_OK;
+}
+
+/**************************************************************************
+** DiskANN index file management
+**************************************************************************/
 
 static int diskAnnOpenIndexFile(
   sqlite3 *db,
