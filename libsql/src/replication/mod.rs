@@ -189,8 +189,17 @@ impl EmbeddedReplicator {
             ));
         }
 
-        // we force a handshake to get the most up to date replication index from the primary.
-        replicator.force_handshake();
+        if let Some(committed_frame_no) = replicator.handshake_and_replicate_step().await {
+            let Either::Left(client) = replicator.client_mut() else {
+                unreachable!()
+            };
+            let Some(primary_index) = client.last_handshake_replication_index() else {
+                return Ok(None);
+            };
+            if committed_frame_no >= primary_index {
+                return Ok(Some(committed_frame_no));
+            }
+        }
 
         loop {
             match replicator.replicate().await {

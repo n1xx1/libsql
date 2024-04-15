@@ -16,6 +16,7 @@ use zerocopy::FromBytes;
 /// A remote replicator client, that pulls frames over RPC
 pub struct RemoteClient {
     remote: super::client::Client,
+    secondary_remote: super::client::Client,
     meta: WalIndexMeta,
     last_received: Option<FrameNo>,
     session_token: Option<Bytes>,
@@ -25,10 +26,11 @@ pub struct RemoteClient {
 }
 
 impl RemoteClient {
-    pub(crate) async fn new(remote: super::client::Client, path: &Path) -> anyhow::Result<Self> {
+    pub(crate) async fn new(remote: super::client::Client, secondary_remote: super::client::Client, path: &Path) -> anyhow::Result<Self> {
         let meta = WalIndexMeta::open_prefixed(path).await?;
         Ok(Self {
             remote,
+            secondary_remote,
             last_received: meta.current_frame_no(),
             meta,
             session_token: None,
@@ -65,6 +67,58 @@ impl RemoteClient {
 impl ReplicatorClient for RemoteClient {
     type FrameStream = Pin<Box<dyn Stream<Item = Result<Frame, Error>> + Send + 'static>>;
 
+    async fn handshake_and_next_frames(&mut self) -> Result<Option<Self::FrameStream>, Error> {
+        if self.session_token.is_none() {
+            return Err(Error::Client("no session token".into()));
+        }
+        if self.dirty {
+            self.meta.reset();
+            self.last_received = self.meta.current_frame_no();
+            self.dirty = false;
+        }
+        let hello_req = self.make_request(HelloRequest::new());
+        let log_offset_req = self.make_request(LogOffset {
+            next_offset: self.next_offset(),
+        });
+        let (hello, frames) = tokio::join!(
+            self.remote.replication.hello(hello_req),
+            self.secondary_remote.replication.batch_log_entries(log_offset_req)
+        );
+        let hello = hello?.into_inner();
+        verify_session_token(&hello.session_token).map_err(Error::Client)?;
+        let new_session = self.session_token != Some(hello.session_token.clone());
+        self.session_token = Some(hello.session_token.clone());
+        let current_replication_index = hello.current_replication_index;
+        if let Err(e) = self.meta.init_from_hello(hello) {
+            // set the meta as dirty. The caller should catch the error and clean the db
+            // file. On the next call to replicate, the db will be replicated from the new
+            // log.
+            if let libsql_replication::meta::Error::LogIncompatible = e {
+                self.dirty = true;
+            }
+
+            Err(e)?;
+        }
+        self.last_handshake_replication_index = current_replication_index;
+        self.meta.flush().await?;
+        if new_session {
+            return Ok(None)
+        }
+        let frames = frames?.into_inner().frames;
+        if let Some(f) = frames.last() {
+            let header: FrameHeader = FrameHeader::read_from_prefix(&f.data)
+                .ok_or_else(|| Error::Internal("invalid frame header".into()))?;
+            self.last_received = Some(header.frame_no.get());
+        }
+
+        let frames_iter = frames
+            .into_iter()
+            .map(|f| Frame::try_from(&*f.data).map_err(|e| Error::Client(e.into())));
+
+        let stream = tokio_stream::iter(frames_iter);
+
+        Ok(Some(Box::pin(stream)))
+    }
     /// Perform handshake with remote
     async fn handshake(&mut self) -> Result<(), Error> {
         tracing::info!("Attempting to perform handshake with primary.");

@@ -68,6 +68,10 @@ impl From<tokio::task::JoinError> for Error {
 pub trait ReplicatorClient {
     type FrameStream: Stream<Item = Result<Frame, Error>> + Unpin + Send;
 
+    /// Performe handshake and return a stream of frames to apply to the database
+    async fn handshake_and_next_frames(&mut self) -> Result<Option<Self::FrameStream>, Error> {
+        Ok(None)
+    }
     /// Perform handshake with remote
     async fn handshake(&mut self) -> Result<(), Error>;
     /// Return a stream of frames to apply to the database
@@ -90,6 +94,19 @@ where
     B: ReplicatorClient + Send,
 {
     type FrameStream = Either<A::FrameStream, B::FrameStream>;
+
+    async fn handshake_and_next_frames(&mut self) -> Result<Option<Self::FrameStream>, Error> {
+        match self {
+            Either::Left(a) => a
+                .handshake_and_next_frames()
+                .await
+                .map(|o| o.map(Either::Left)),
+            Either::Right(b) => b
+                .handshake_and_next_frames()
+                .await
+                .map(|o| o.map(Either::Right)),
+        }
+    }
 
     async fn handshake(&mut self) -> Result<(), Error> {
         match self {
@@ -153,7 +170,7 @@ enum ReplicatorState {
     Exit,
 }
 
-impl<C: ReplicatorClient> Replicator<C> {
+impl<C: ReplicatorClient + Send> Replicator<C> {
     /// Creates a replicator for the db file pointed at by `db_path`
     pub async fn new(
         client: C,
@@ -195,6 +212,41 @@ impl<C: ReplicatorClient> Replicator<C> {
         loop {
             if let Err(e) = self.replicate().await {
                 return e;
+            }
+        }
+    }
+
+    async fn handshake_and_replicate_step_inner(&mut self) -> Result<Option<FrameNo>, Error> {
+        let res = self.client.handshake_and_next_frames().await?;
+        Ok(match res {
+            Some(mut stream) => {
+                while let Some(frame) = stream.next().await.transpose()? {
+                    self.inject_frame(frame).await?;
+                }
+                self.client.committed_frame_no()
+            }
+            None => None,
+        })
+    }
+
+    pub async fn handshake_and_replicate_step(&mut self) -> Option<FrameNo> {
+        let ret = self.handshake_and_replicate_step_inner().await;
+        if ret.is_err() {
+            self.client.rollback();
+            self.injector.lock().rollback();
+        }
+        match ret {
+            Ok(frame_no) => {
+                self.state = ReplicatorState::NeedFrames;
+                frame_no
+            }
+            Err(Error::NeedSnapshot) => {
+                self.state = ReplicatorState::NeedSnapshot;
+                None
+            }
+            Err(_) => {
+                self.state = ReplicatorState::NeedHandshake;
+                None
             }
         }
     }
