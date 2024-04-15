@@ -4,6 +4,11 @@
 #include "wasm_bindings.h"
 #include <wasmedge/wasmedge.h>
 
+#define BYTESWAP32(x) ( \
+    (((x)&0x000000FF)<<24) + (((x)&0x0000FF00)<<8)  \
+  + (((x)&0x00FF0000)>>8)  + (((x)&0xFF000000)>>24) \
+)
+
 void libsql_run_wasm(libsql_wasm_udf_api *api, sqlite3_context *context, libsql_wasm_engine_t *engine,
     libsql_wasm_module_t *module, const char *func_name, int argc, sqlite3_value **argv) {
 
@@ -123,6 +128,25 @@ void libsql_run_wasm(libsql_wasm_udf_api *api, sqlite3_context *context, libsql_
     }
     char type = *type_ptr;
     switch (type) {
+    case SQLITE_INTEGER: {
+      const char *wasm_result = type_ptr + 1;
+      int wasm_result_b = sqlite3Get4byte(wasm_result);
+      wasm_result += 4;
+      int wasm_result_l = sqlite3Get4byte(wasm_result);
+      sqlite_int64 wasm_result_int64 = wasm_result_l & (wasm_result_b << 32);
+      sqlite3_result_int(context, wasm_result_int64);
+      break;
+    }
+    case SQLITE_FLOAT: {
+      const char *wasm_result = type_ptr + 1;
+      int wasm_result_b = sqlite3Get4byte(wasm_result);
+      wasm_result += 4;
+      int wasm_result_l = sqlite3Get4byte(wasm_result);
+      sqlite_int64 wasm_result_int64 = wasm_result_l & (wasm_result_b << 32);
+      double wasm_result_double = *((const double*) (&wasm_result_int64));
+      sqlite3_result_double(context, wasm_result_double);
+      break;
+    }
     case SQLITE_TEXT: {
       const char *wasm_result = type_ptr + 1;
       size_t wasm_result_len = strlen(wasm_result);

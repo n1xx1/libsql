@@ -265,6 +265,18 @@ pub fn libsql_run_wasm(
             Val::I32(v) => {
                 let v = v as usize;
                 match memory.data(&store)[v] as i8 {
+                    LIBSQL_INTEGER => {
+                        let result_int = i64::from_be_bytes(
+                            memory.data(&store)[v + 1..v + 1 + 8].try_into().unwrap(), // safe to unwrap, slice size == 8
+                        );
+                        unsafe { ((*api).libsql_result_int)(libsql_ctx, result_int as i32) }
+                    }
+                    LIBSQL_FLOAT => {
+                        let result_double = f64::from_be_bytes(
+                            memory.data(&store)[v + 1..v + 1 + 8].try_into().unwrap(), // safe to unwrap, slice size == 8
+                        );
+                        unsafe { ((*api).libsql_result_double)(libsql_ctx, result_double) }
+                    }
                     LIBSQL_TEXT => {
                         let result_str = unsafe {
                             CStr::from_ptr(
